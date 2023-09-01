@@ -1,117 +1,68 @@
 import tensorflow as tf
 
-def IoUs(target,predictionA,predictionB):
-    x_t,y_t,w_t,h_t=target[...,0],target[...,1],target[...,2],target[...,3]
-    x_A,y_A,w_A,h_A=predictionA[...,0],predictionA[...,1],predictionA[...,2],predictionA[...,3]
-    x_B,y_B,w_B,h_B=predictionB[...,0],predictionB[...,1],predictionB[...,2],predictionB[...,3]
+def ious(true,pred):
+    xt, yt, wt, ht = tf.split(true, 4, axis=-1)
+    xp, yp, wp, hp = tf.split(pred, 4, axis=-1)
 
-    #conversion in order to compute intesetctions and unions
-    x_tmin=x_t - (w_t / 2)
-    x_tmax=x_t + (w_t / 2)
-    y_tmin=y_t - (h_t / 2)
-    y_tmax=y_t + (h_t / 2)
+    xmin = tf.maximum(xt-(wt/2) ,xp-(wp/2) )
+    ymin = tf.maximum(yt-(ht/2) ,yp-(hp/2) )
+    xmax = tf.minimum(xt+(wt/2) ,xp+(wp/2) )
+    ymax = tf.minimum(yt+(ht/2) ,yp+(hp/2) )
 
-    x_Amin=x_A - (w_A / 2)
-    x_Amax=x_A + (w_A / 2)
-    y_Amin=y_A - (h_A / 2)
-    y_Amax=y_A + (h_A / 2)
-    
-    x_Bmin=x_B - (w_B / 2)
-    x_Bmax=x_B + (w_B / 2)
-    y_Bmin=y_B - (h_B / 2)
-    y_Bmax=y_B + (h_B / 2)
+    intersection = tf.maximum(xmax - xmin, 0.) * tf.maximum(ymax - ymin, .0)
 
-    #areas of the bounding box of target and predictions
-    bb_A=tf.maximum((w_A + 1)*(h_A +1),0)
-    bb_B=tf.maximum((w_B + 1)*(h_B +1),0)
-    bb_t=(w_t + 1)*(h_t +1)         #should never be lower than zero
+    union = (wt*ht) + (wp*hp) - intersection
 
-    #for bbA a compute the corner of intersection
-    x_minIA=tf.maximum(x_tmin,x_Amin)  #xA
-    x_maxIA=tf.minimum(x_tmax,x_Amax)  #xB
-    y_minIA=tf.maximum(y_tmin,y_Amin)  #yA
-    y_maxIA=tf.minimum(y_tmax,y_Amax)  #yB
+    ious_= tf.math.divide_no_nan(intersection,union)
 
-    #intersection
-    intA=tf.maximum(0,x_maxIA - x_minIA + 1) * tf.maximum(0,y_maxIA - y_minIA + 1)
-
-    #union  
-    uniA= bb_A + bb_t - intA
-
-    iouA=intA / uniA
+    return ious_
 
 
-    #for bbB a compute the corner of intersection
-    x_minIB=tf.maximum(x_tmin,x_Bmin)  #xA
-    x_maxIB=tf.minimum(x_tmax,x_Bmax)  #xB
-    y_minIB=tf.maximum(y_tmin,y_Bmin)  #yA
-    y_maxIB=tf.minimum(y_tmax,y_Bmax)  #yB
+def CoordLoss(y_true, y_pred):
 
-    #intersection
-    intB=tf.maximum((x_maxIB - x_minIB + 1),0) * tf.maximum((y_maxIB - y_minIB + 1),0)
+    l_o=1.
 
-    #union  
-    uniB= bb_B + bb_t - intB
+    #find if it exist an object in the grid
+    existsObject = tf.expand_dims(y_true[..., 4], -1)
 
-    iouB=intB / uniB
+    xy_pred = existsObject * y_pred[..., 0:2]
+    xy_true = existsObject * y_true[..., 0:2]
+    wh_pred = existsObject * tf.sqrt(y_pred[..., 2:4])
+    wh_true = existsObject * tf.sqrt(y_true[..., 2:4])
 
-    return tf.stack([iouA,iouB])
+    coordLoss = tf.reduce_sum(tf.math.square(wh_pred - wh_true))
+    coordLoss += (l_o * tf.reduce_sum(tf.math.square(xy_pred - xy_true)))
 
+    return coordLoss
 
-def YOLOloss(target,predictions):
-    G=7  #  GRID 
-    B=2  #  bb per cell 
+def ConfidenceLoss(y_true, y_pred):
 
-    ious = IoUs(target[..., 1:5],predictions[..., 1:5],predictions[..., 6:])  # ... x 7 x 7 x 2
-    #print(ious)
-    best_pred=tf.expand_dims(tf.cast(tf.argmax(ious),float),3)
-    #print(best_pred)
+    l_obj=5.
+    l_no=1.
 
-    best_ious=tf.expand_dims(tf.maximum(ious[0],ious[1]),3)
-    #print(best_ious)
+    existsObject = tf.expand_dims(y_true[..., 4], -1)
 
-    is_box=tf.expand_dims(target[...,0],3)
-    #print(is_box)
+    iou_scores = ious(y_true[...,0:4],y_pred[...,0:4])
 
-    #print(predictions[..., 1:5])
+    best_ious = tf.reduce_max(iou_scores, axis=4)
 
-    ###box coordinates error
-    #take only the best box (higher IoU) in order to compute the error
+    confidenceLoss = (l_obj * tf.reduce_sum(tf.math.square(existsObject * (iou_scores - y_pred[..., 4:5]))))
+    confidenceLoss += (l_no * tf.reduce_sum(tf.math.square((1 - existsObject) * (0 - y_pred[...,4:5]))))
 
-    best_bb= is_box * ( best_pred * predictions[..., 6:] + (1 - best_pred) * predictions[..., 1:5])
-    #print(best_bb)
-
-    target_bb=is_box*target[..., 1:5]
-    #print(target_bb)
-
-    lambda_coord=5.
-    loss_bb_coord=lambda_coord*tf.reduce_sum(tf.pow(best_bb[...,0]-target_bb[...,0],2)+tf.pow(best_bb[...,1]-target_bb[...,1],2))
-    #print(loss_bb_coord)
+    return confidenceLoss
 
 
-    ###box dimension error
-    loss_bb_dim=lambda_coord*tf.reduce_sum(tf.pow(tf.sqrt(best_bb[...,2])-tf.sqrt(target_bb[...,2]),2)+tf.pow(tf.sqrt(best_bb[...,3])-tf.sqrt(target_bb[...,3]),2))
-    #print(loss_bb_dim)
+def yoloLoss(y_true, y_pred):
 
-    predictions=tf.expand_dims(predictions,3)
-    ###object confidence error
-    best_bb_confidence= is_box * (best_pred * predictions[..., 5] + (1 - best_pred)*predictions[..., 0])
-    #print(best_bb_confidence)
+    coordLoss = CoordLoss(y_true, y_pred)
+    confidenceLoss = ConfidenceLoss(y_true, y_pred)
 
-    loss_obj_conf=tf.reduce_sum(tf.pow((is_box*best_ious)-best_bb_confidence,2))
-    #print(loss_obj_conf)
+    return  coordLoss  +  confidenceLoss
 
-    
+def metric_avg_iou(y_true, y_pred):
 
-    ###on-object confidence error
-    best_noobj_confidence= (1-is_box) * (best_pred * predictions[..., 5] + (1 - best_pred)*predictions[..., 0])
-    #print(best_noobj_confidence)
+  IoUs = ious(y_true[...,0:4],y_pred[...,0:4])
 
-    lambda_noobj=0.5
-    #print(is_box)
-    #print(best_ious)
-    #print((1-is_box)*best_ious)
-    loss_noobj_conf=lambda_noobj*tf.reduce_sum(tf.pow(((1-is_box)*best_ious)-best_noobj_confidence,2))
-    #print(loss_noobj_conf)
+  existsObject = tf.expand_dims(y_true[..., 4], -1)
 
-    return loss_bb_coord + loss_bb_dim + loss_obj_conf + loss_noobj_conf
+  return  tf.reduce_sum(IoUs) / tf.cast(tf.math.count_nonzero(existsObject), dtype=tf.float32)
