@@ -1,0 +1,17 @@
+{
+    "GRID_SIZE": 13,
+    "IMAGE_H": 416,
+    "IMAGE_W": 416,
+    "IMAGE_C": 1,
+    "N_ANCHORS": 5,
+    "BATCH_SIZE": 1,
+    "DIRECTORY_PATH": "dataset",
+    "TRAIN_PATH": "dataset/train",
+    "VALID_PATH": "dataset/valid",
+    "TEST_PATH": "dataset/test",
+    "ANCHORS":[ [10.86737798,  8.96268465],
+                [ 1.0857748,   0.66367764],
+                [ 3.28578248 , 3.39195216],
+                [ 2.02929464,  1.4848351 ],
+                [ 3.22128584 , 1.8153547 ]]
+}

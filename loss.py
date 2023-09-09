@@ -1,6 +1,12 @@
 import tensorflow as tf
+from tensorflow import keras
 
+
+@keras.saving.register_keras_serializable(package="ious", name="ious")
 def ious(true,pred):
+    """
+    Compute intersection over union between predicted bounding box and ground truth bounding box
+    """
     xt, yt, wt, ht = tf.split(true, 4, axis=-1)
     xp, yp, wp, hp = tf.split(pred, 4, axis=-1)
 
@@ -18,11 +24,15 @@ def ious(true,pred):
     return ious_
 
 
+@keras.saving.register_keras_serializable(package="CoordLoss", name="CoordLoss")
 def CoordLoss(y_true, y_pred):
+    """
+    Cordinate loss computed as MSE only for the box predicted in a cell where an object actually is  
+    """
 
     l_o=1.
 
-    #find if it exist an object in the grid
+    #find if it exist an object in the cell
     existsObject = tf.expand_dims(y_true[..., 4], -1)
 
     xy_pred = existsObject * y_pred[..., 0:2]
@@ -33,32 +43,38 @@ def CoordLoss(y_true, y_pred):
     coordLoss = tf.reduce_sum(tf.math.square(wh_pred - wh_true))
     coordLoss += (l_o * tf.reduce_sum(tf.math.square(xy_pred - xy_true)))
 
-    return coordLoss
+    return coordLoss / (tf.cast(tf.math.count_nonzero(existsObject), dtype=tf.float32) + 1e-6) /2
 
+
+@keras.saving.register_keras_serializable(package="ConfidenceLoss", name="ConfidenceLoss")
 def ConfidenceLoss(y_true, y_pred):
-
-    l_obj=5.
-    l_no=1.
+    """
+    Confidence tries to predict the intersection over union between ground truth box and predicted box
+    """
+    l_obj=10.
+    l_no=10.
 
     existsObject = tf.expand_dims(y_true[..., 4], -1)
 
     iou_scores = ious(y_true[...,0:4],y_pred[...,0:4])
 
-    best_ious = tf.reduce_max(iou_scores, axis=4)
-
     confidenceLoss = (l_obj * tf.reduce_sum(tf.math.square(existsObject * (iou_scores - y_pred[..., 4:5]))))
     confidenceLoss += (l_no * tf.reduce_sum(tf.math.square((1 - existsObject) * (0 - y_pred[...,4:5]))))
 
-    return confidenceLoss
+    return confidenceLoss / (tf.reduce_sum(tf.cast(existsObject  >= 0.0,dtype=float)) + 1e-6) /2
 
-
+@keras.saving.register_keras_serializable(package="yoloLoss", name="yoloLoss")
 def yoloLoss(y_true, y_pred):
-
+    """ 
+    Model loss, given by the sum of Coordinates loss and Confidence loss
+    """
     coordLoss = CoordLoss(y_true, y_pred)
     confidenceLoss = ConfidenceLoss(y_true, y_pred)
 
-    return  coordLoss  +  confidenceLoss
+    return  coordLoss  +  5*confidenceLoss
 
+
+@keras.saving.register_keras_serializable(package="metric_avg_iou", name="metric_avg_iou")
 def metric_avg_iou(y_true, y_pred):
 
   IoUs = ious(y_true[...,0:4],y_pred[...,0:4])
