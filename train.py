@@ -7,7 +7,7 @@ from data_processing import make_file_list, kmeans, My_Custom_Generator
 from model import def_model
 
 
-#Load configuration variables
+#Load configuration parameters
 with open("config.json","r") as f:
   data = f.read()
 
