@@ -1,8 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import json
-from loss import ious
-from data_processing import make_file_list, My_Custom_Generator
+from loss_CPD import ious
+from data_processing_CPD import make_file_list, My_Custom_Generator
 
 #Load configuration parameters
 with open("config.json","r") as f:
