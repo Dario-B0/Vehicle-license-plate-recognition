@@ -2,9 +2,9 @@ import numpy as np
 import json
 import tensorflow as tf
 from keras.callbacks import ModelCheckpoint
-from loss import yoloLoss, ConfidenceLoss, CoordLoss, metric_avg_iou
-from data_processing import make_file_list, kmeans, My_Custom_Generator
-from model import def_model
+from loss_CPD import yoloLoss, ConfidenceLoss, CoordLoss, metric_avg_iou
+from data_processing_CPD import make_file_list, kmeans, My_Custom_Generator
+from model_CPD import def_model
 
 
 #Load configuration parameters
