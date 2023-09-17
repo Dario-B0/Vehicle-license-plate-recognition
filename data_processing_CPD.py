@@ -164,7 +164,7 @@ class My_Custom_Generator(keras.utils.Sequence) :
     self.batch_size = batch_size
     self.grid_size = grid_size
     self.IR = ImageReader(size_W=416,size_H=416)
-    self.anchors = anchors
+    self.anchors = np.array(anchors)
 
 
   def __len__(self) :

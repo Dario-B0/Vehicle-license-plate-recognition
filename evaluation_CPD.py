@@ -3,6 +3,8 @@ import numpy as np
 import json
 from loss_CPD import ious
 from data_processing_CPD import make_file_list, My_Custom_Generator
+from model_CPD import def_model
+from train_CPD import compile_model
 
 #Load configuration parameters
 with open("config.json","r") as f:
@@ -58,12 +60,12 @@ def list_all_trueBoxes(test_generator):
   """
   all_true_boxes = []
 
-  for i in range(32):
+  for i in range(test_generator.__len__()):
     img_batch,lab_batch=test_generator.__getitem__(i)
-    for j in range(32):
+    for j in range(config["BATCH_SIZE"]):
       labels = get_true_labels(lab_batch[j])
       for k in range(len(labels)):
-        all_true_boxes.append([i*32+j,labels[k,0],labels[k,1],labels[k,2],labels[k,3],labels[k,4]])
+        all_true_boxes.append([i*config["BATCH_SIZE"]+j,labels[k,0],labels[k,1],labels[k,2],labels[k,3],labels[k,4]])
 
   all_true_boxes=np.array(all_true_boxes)
 
@@ -157,7 +159,11 @@ test_list=make_file_list(config["TEST_PATH"])
 test_generator = My_Custom_Generator(test_list, config["BATCH_SIZE"], config["GRID_SIZE"],config["ANCHORS"])
 
 
-model = tf.keras.model.load(...)  # use the path in which the model has been saved
+model=def_model(config["IMAGE_H"],config["IMAGE_W"] ,config["IMAGE_C"] ,config["GRID_SIZE"] ,config["N_ANCHORS"],config["ANCHORS"])
+model.load_weights("model_CPD.h5")  # use the path in which the model has been saved
+
+compile_model(model)
+
 loss,coordinateLoss, confidenceLoss, average_IoU = model.evaluate(test_generator)
 
 print("Loss: {}\nCoordinate Loss: {}\nConfidenceLoss: {}\nAverage Intersection over Union: {}".format(loss,coordinateLoss, confidenceLoss, average_IoU))

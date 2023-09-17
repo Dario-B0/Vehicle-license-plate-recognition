@@ -64,7 +64,7 @@ def ConfidenceLoss(y_true, y_pred):
     return confidenceLoss / (tf.reduce_sum(tf.cast(existsObject  >= 0.0,dtype=float)) + 1e-6) /2
 
 @keras.saving.register_keras_serializable(package="yoloLoss", name="yoloLoss")
-def yoloLoss(y_true, y_pred):
+def customLoss(y_true, y_pred):
     """ 
     Model loss, given by the sum of Coordinates loss and Confidence loss
     """
